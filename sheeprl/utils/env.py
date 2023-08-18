@@ -8,6 +8,7 @@ import numpy as np
 
 from sheeprl.algos.args import StandardArgs
 from sheeprl.envs.wrappers import ActionRepeat, FrameStack, MaskVelocityWrapper
+from sheeprl.envs.record_safety_statistics_wrapper import RecordSafetyStatistics
 
 
 def make_env(
@@ -285,7 +286,7 @@ def make_dict_env(
         env.observation_space.seed(seed)
         if args.max_episode_steps > 0:
             env = gym.wrappers.TimeLimit(env, max_episode_steps=args.max_episode_steps // args.action_repeat)
-        env = gym.wrappers.RecordEpisodeStatistics(env)
+        env = RecordSafetyStatistics(env)
         if args.capture_video and rank == 0 and vector_env_idx == 0 and run_name is not None:
             env = gym.experimental.wrappers.RecordVideoV0(
                 env, os.path.join(run_name, prefix + "_videos" if prefix else "videos"), disable_logger=True
