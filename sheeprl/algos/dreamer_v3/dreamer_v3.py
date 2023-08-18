@@ -44,33 +44,7 @@ from torchmetrics import SumMetric
 # os.environ["PYOPENGL_PLATFORM"] = ""
 # os.environ["MUJOCO_GL"] = "osmesa"
 
-import argparse
-import wandb
-import time
-from dataclasses import dataclass
-from typing import Iterable
-
-@dataclass
-class WandBArgs:
-    track: bool = False
-    wandb_project_name: str = "svf_gymnasium"
-    wandb_entity: str = "dtch1997"
-    wandb_group: str = "default"
-    wandb_tags: Iterable[str] = tuple()
-
-
-def init_wandb(args) -> "wandb.Run":
-
-    run_name = f"{args.env_id}__{args.algo}__{int(time.time())}"
-    return wandb.init(
-        name=run_name,
-        project=args.wandb_project_name,
-        entity=args.wandb_entity,
-        group=args.wandb_group,
-        tags=args.wandb_tags,
-        config=args,
-        sync_tensorboard=True        
-    )
+from sheeprl.utils.wandb import WandBArgs, init_wandb
 
 def train(
     fabric: Fabric,
@@ -343,21 +317,11 @@ def train(
 @register_algorithm()
 def main():
     parser = HfArgumentParser([DreamerV3Args, WandBArgs])
-    args: DreamerV3Args = None 
-    wandb_args: WandBArgs = None
     args, wandb_args = parser.parse_args_into_dataclasses()
 
-    run_name = f"{args.env_id}__DreamerV3__{int(time.time())}"
+    run_name = f"{args.env_id}__P2EDV2__{int(time.time())}"
     if wandb_args.track:
-        wandb.init(
-            name=run_name,
-            project=wandb_args.wandb_project_name,
-            entity=wandb_args.wandb_entity,
-            group=wandb_args.wandb_group,
-            tags=wandb_args.wandb_tags,
-            config=wandb_args,
-            sync_tensorboard=True        
-        )
+        init_wandb(wandb_args, run_name, args)
 
     # These arguments cannot be changed
     args.screen_size = 64

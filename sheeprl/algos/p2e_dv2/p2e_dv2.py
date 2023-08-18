@@ -38,7 +38,7 @@ from sheeprl.utils.utils import polynomial_decay
 
 # Decomment the following line if you are using MineDojo on an headless machine
 # os.environ["MINEDOJO_HEADLESS"] = "1"
-
+from sheeprl.utils.wandb import WandBArgs, init_wandb
 
 def train(
     fabric: Fabric,
@@ -464,8 +464,12 @@ def train(
 
 @register_algorithm()
 def main():
-    parser = HfArgumentParser(P2EDV2Args)
-    args: P2EDV2Args = parser.parse_args_into_dataclasses()[0]
+    parser = HfArgumentParser([P2EDV2Args, WandBArgs])
+    args, wandb_args = parser.parse_args_into_dataclasses()
+
+    run_name = f"{args.env_id}__P2EDV2__{int(time.time())}"
+    if wandb_args.track:
+        init_wandb(wandb_args, run_name, vars(args))
 
     # These arguments cannot be changed
     args.screen_size = 64
@@ -663,6 +667,9 @@ def main():
                 "Loss/state_loss": MeanMetric(sync_on_compute=False),
                 "Loss/continue_loss": MeanMetric(sync_on_compute=False),
                 "Loss/ensemble_loss": MeanMetric(sync_on_compute=False),
+                "Metrics/CumulativeSafetyViolations": MeanMetric(sync_on_compute=False),
+                "Metrics/EpRet": MeanMetric(sync_on_compute=False),
+                "Metrics/EpLen": MeanMetric(sync_on_compute=False),
                 "State/kl": MeanMetric(sync_on_compute=False),
                 "State/p_entropy": MeanMetric(sync_on_compute=False),
                 "State/q_entropy": MeanMetric(sync_on_compute=False),
@@ -762,6 +769,7 @@ def main():
     player.init_states()
 
     gradient_steps = 0
+    total_safety_violations = 0
     is_exploring = True
     for global_step in range(start_step, num_updates + 1):
         if global_step == exploration_updates:
@@ -802,6 +810,8 @@ def main():
 
         step_data["is_first"] = copy.deepcopy(step_data["dones"])
         o, rewards, dones, truncated, infos = envs.step(real_actions.reshape(envs.action_space.shape))
+        total_safety_violations += dones.sum().item()
+        aggregator.update('Metrics/CumulativeSafetyViolations', total_safety_violations)
         dones = np.logical_or(dones, truncated)
         if args.dry_run and buffer_type == "episode":
             dones = np.ones_like(dones)
@@ -814,6 +824,9 @@ def main():
                     )
                     aggregator.update("Rewards/rew_avg", agent_final_info["episode"]["r"][0])
                     aggregator.update("Game/ep_len_avg", agent_final_info["episode"]["l"][0])
+                    # Log the same metrics but with a different name to be consistent
+                    aggregator.update("Metrics/EpRet", agent_final_info["episode"]["r"][0])
+                    aggregator.update("Metrics/EpLen", agent_final_info["episode"]["l"][0])
 
         # Save the real next observation
         real_next_obs = copy.deepcopy(o)
