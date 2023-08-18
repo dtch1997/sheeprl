@@ -468,6 +468,8 @@ def main():
                 "Metrics/CumulativeSafetyViolations": MeanMetric(sync_on_compute=False),
                 "Metrics/EpRet": MeanMetric(sync_on_compute=False),
                 "Metrics/EpLen": MeanMetric(sync_on_compute=False),
+                "Metrics/EpCost": MeanMetric(sync_on_compute=False),
+                "Metrics/ModifiedEpRet": MeanMetric(sync_on_compute=False),
                 "State/kl": MeanMetric(sync_on_compute=False),
                 "State/post_entropy": MeanMetric(sync_on_compute=False),
                 "State/prior_entropy": MeanMetric(sync_on_compute=False),
