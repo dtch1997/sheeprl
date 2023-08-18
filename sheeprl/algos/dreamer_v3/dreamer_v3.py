@@ -348,15 +348,16 @@ def main():
     args, wandb_args = parser.parse_args_into_dataclasses()
 
     run_name = f"{args.env_id}__DreamerV3__{int(time.time())}"
-    wandb.init(
-        name=run_name,
-        project=wandb_args.wandb_project_name,
-        entity=wandb_args.wandb_entity,
-        group=wandb_args.wandb_group,
-        tags=wandb_args.wandb_tags,
-        config=wandb_args,
-        sync_tensorboard=True        
-    )
+    if wandb_args.track:
+        wandb.init(
+            name=run_name,
+            project=wandb_args.wandb_project_name,
+            entity=wandb_args.wandb_entity,
+            group=wandb_args.wandb_group,
+            tags=wandb_args.wandb_tags,
+            config=wandb_args,
+            sync_tensorboard=True        
+        )
 
     # These arguments cannot be changed
     args.screen_size = 64
@@ -500,7 +501,9 @@ def main():
                 "Loss/reward_loss": MeanMetric(sync_on_compute=False),
                 "Loss/state_loss": MeanMetric(sync_on_compute=False),
                 "Loss/continue_loss": MeanMetric(sync_on_compute=False),
-                "Metric/CumulativeSafetyViolations": SumMetric(sync_on_compute=False),
+                "Metrics/CumulativeSafetyViolations": MeanMetric(sync_on_compute=False),
+                "Metrics/EpRet": MeanMetric(sync_on_compute=False),
+                "Metrics/EpLen": MeanMetric(sync_on_compute=False),
                 "State/kl": MeanMetric(sync_on_compute=False),
                 "State/post_entropy": MeanMetric(sync_on_compute=False),
                 "State/prior_entropy": MeanMetric(sync_on_compute=False),
@@ -566,6 +569,7 @@ def main():
     player.init_states()
 
     gradient_steps = 0
+    total_safety_violations = 0
     for global_step in range(start_step, num_updates + 1):
         # Sample an action given the observation received by the environment
         if global_step <= learning_starts and args.checkpoint_path is None and "minedojo" not in args.env_id:
@@ -600,6 +604,8 @@ def main():
         rb.add(step_data[None, ...])
 
         o, rewards, dones, truncated, infos = envs.step(real_actions.reshape(envs.action_space.shape))
+        total_safety_violations += dones.sum().item()
+        aggregator.update('Metrics/CumulativeSafetyViolations', total_safety_violations)
         dones = np.logical_or(dones, truncated)
 
         step_data["is_first"] = torch.zeros_like(step_data["dones"])
@@ -621,6 +627,9 @@ def main():
                     )
                     aggregator.update("Rewards/rew_avg", agent_final_info["episode"]["r"][0])
                     aggregator.update("Game/ep_len_avg", agent_final_info["episode"]["l"][0])
+                    # Log the same metrics but with a different name to be consistent
+                    aggregator.update("Metrics/EpRet", agent_final_info["episode"]["r"][0])
+                    aggregator.update("Metrics/EpLen", agent_final_info["episode"]["l"][0])
 
         # Save the real next observation
         real_next_obs = copy.deepcopy(o)
