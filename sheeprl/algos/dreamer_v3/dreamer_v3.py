@@ -594,8 +594,10 @@ def main():
                     aggregator.update("Rewards/rew_avg", agent_final_info["episode"]["r"][0])
                     aggregator.update("Game/ep_len_avg", agent_final_info["episode"]["l"][0])
                     # Log the same metrics but with a different name to be consistent
-                    aggregator.update("Metrics/EpRet", agent_final_info["episode"]["r"][0])
+                    aggregator.update("Metrics/ModifiedEpRet", agent_final_info["episode"]["r"][0])
                     aggregator.update("Metrics/EpLen", agent_final_info["episode"]["l"][0])
+                    aggregator.update("Metrics/EpRet", agent_final_info["episode"]["orig_r"][0])
+                    aggregator.update("Metrics/EpCost", agent_final_info["episode"]["orig_c"][0])
 
         # Save the real next observation
         real_next_obs = copy.deepcopy(o)
