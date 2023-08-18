@@ -28,7 +28,7 @@ from sheeprl.utils.logger import create_tensorboard_logger
 from sheeprl.utils.metric import MetricAggregator
 from sheeprl.utils.parser import HfArgumentParser
 from sheeprl.utils.registry import register_algorithm
-
+from sheeprl.utils.wandb import WandBArgs, init_wandb
 
 def train(
     fabric: Fabric,
@@ -81,8 +81,12 @@ def train(
 
 @register_algorithm()
 def main():
-    parser = HfArgumentParser(SACArgs)
-    args: SACArgs = parser.parse_args_into_dataclasses()[0]
+    parser = HfArgumentParser([SACArgs, WandBArgs])
+    args, wandb_args = parser.parse_args_into_dataclasses()
+
+    run_name = f"{args.env_id}__PPO-SVF__{int(time.time())}"
+    if wandb_args.track:
+        init_wandb(wandb_args, run_name, vars(args))
 
     # Initialize Fabric
     fabric = Fabric(callbacks=[CheckpointCallback()])
@@ -163,6 +167,9 @@ def main():
                 "Loss/value_loss": MeanMetric(),
                 "Loss/policy_loss": MeanMetric(),
                 "Loss/alpha_loss": MeanMetric(),
+                "Metrics/CumulativeSafetyViolations": MeanMetric(sync_on_compute=False),
+                "Metrics/EpRet": MeanMetric(sync_on_compute=False),
+                "Metrics/EpLen": MeanMetric(sync_on_compute=False),
             }
         )
 
@@ -178,6 +185,7 @@ def main():
     step_data = TensorDict({}, batch_size=[args.num_envs], device=device)
 
     # Global variables
+    total_safety_violations = 0
     start_time = time.perf_counter()
     num_updates = int(args.total_steps // (args.num_envs * fabric.world_size)) if not args.dry_run else 1
     args.learning_starts = args.learning_starts // int(args.num_envs * fabric.world_size) if not args.dry_run else 0
@@ -195,6 +203,8 @@ def main():
                 actions, _ = actor.module(obs)
                 actions = actions.cpu().numpy()
         next_obs, rewards, dones, truncated, infos = envs.step(actions)
+        total_safety_violations += dones.sum().item()
+        aggregator.update('Metrics/CumulativeSafetyViolations', total_safety_violations)
         dones = np.logical_or(dones, truncated)
 
         if "final_info" in infos:
@@ -205,6 +215,8 @@ def main():
                     )
                     aggregator.update("Rewards/rew_avg", agent_final_info["episode"]["r"][0])
                     aggregator.update("Game/ep_len_avg", agent_final_info["episode"]["l"][0])
+                    aggregator.update("Metrics/EpRet", agent_final_info["episode"]["r"][0])
+                    aggregator.update("Metrics/EpLen", agent_final_info["episode"]["l"][0])
 
         # Save the real next observation
         real_next_obs = next_obs.copy()

@@ -29,6 +29,7 @@ from sheeprl.utils.metric import MetricAggregator
 from sheeprl.utils.parser import HfArgumentParser
 from sheeprl.utils.registry import register_algorithm
 from sheeprl.utils.utils import gae, normalize_tensor, polynomial_decay
+from sheeprl.utils.wandb import WandBArgs, init_wandb
 
 
 def train(
@@ -102,8 +103,12 @@ def train(
 
 @register_algorithm()
 def main():
-    parser = HfArgumentParser(PPOArgs)
-    args: PPOArgs = parser.parse_args_into_dataclasses()[0]
+    parser = HfArgumentParser([PPOArgs, WandBArgs])
+    args, wandb_args = parser.parse_args_into_dataclasses()
+
+    run_name = f"{args.env_id}__PPO-SVF__{int(time.time())}"
+    if wandb_args.track:
+        init_wandb(wandb_args, run_name, vars(args))
 
     if "minedojo" in args.env_id:
         raise ValueError(
@@ -221,6 +226,9 @@ def main():
                 "Loss/value_loss": MeanMetric(),
                 "Loss/policy_loss": MeanMetric(),
                 "Loss/entropy_loss": MeanMetric(),
+                "Metrics/CumulativeSafetyViolations": MeanMetric(sync_on_compute=False),
+                "Metrics/EpRet": MeanMetric(sync_on_compute=False),
+                "Metrics/EpLen": MeanMetric(sync_on_compute=False),
             }
         )
 
@@ -237,6 +245,7 @@ def main():
 
     # Global variables
     global_step = 0
+    total_safety_violations = 0
     start_time = time.perf_counter()
     single_global_rollout = int(args.num_envs * args.rollout_steps * world_size)
     num_updates = args.total_steps // single_global_rollout if not args.dry_run else 1
@@ -279,6 +288,8 @@ def main():
 
             # Single environment step
             o, reward, done, truncated, info = envs.step(real_actions)
+            total_safety_violations += done.sum().item()
+            aggregator.update('Metrics/CumulativeSafetyViolations', total_safety_violations)
             done = np.logical_or(done, truncated)
 
             with device:
@@ -317,6 +328,8 @@ def main():
                         )
                         aggregator.update("Rewards/rew_avg", agent_final_info["episode"]["r"][0])
                         aggregator.update("Game/ep_len_avg", agent_final_info["episode"]["l"][0])
+                        aggregator.update("Metrics/EpRet", agent_final_info["episode"]["r"][0])
+                        aggregator.update("Metrics/EpLen", agent_final_info["episode"]["l"][0])
 
         # Estimate returns with GAE (https://arxiv.org/abs/1506.02438)
         with torch.no_grad():

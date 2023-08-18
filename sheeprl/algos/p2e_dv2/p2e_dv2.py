@@ -467,7 +467,7 @@ def main():
     parser = HfArgumentParser([P2EDV2Args, WandBArgs])
     args, wandb_args = parser.parse_args_into_dataclasses()
 
-    run_name = f"{args.env_id}__P2EDV2__{int(time.time())}"
+    run_name = f"{args.env_id}__P2EDV2-SVF__{int(time.time())}"
     if wandb_args.track:
         init_wandb(wandb_args, run_name, vars(args))
 
