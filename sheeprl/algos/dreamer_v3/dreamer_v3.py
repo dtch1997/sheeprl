@@ -39,7 +39,7 @@ from sheeprl.utils.metric import MetricAggregator
 from sheeprl.utils.parser import HfArgumentParser
 from sheeprl.utils.registry import register_algorithm
 from sheeprl.utils.utils import polynomial_decay
-
+from torchmetrics import SumMetric
 # Decomment the following two lines if you cannot start an experiment with DMC environments
 # os.environ["PYOPENGL_PLATFORM"] = ""
 # os.environ["MUJOCO_GL"] = "osmesa"
@@ -460,6 +460,7 @@ def main():
                 "Loss/reward_loss": MeanMetric(sync_on_compute=False),
                 "Loss/state_loss": MeanMetric(sync_on_compute=False),
                 "Loss/continue_loss": MeanMetric(sync_on_compute=False),
+                "Metric/CumulativeSafetyViolations": SumMetric(sync_on_compute=False),
                 "State/kl": MeanMetric(sync_on_compute=False),
                 "State/post_entropy": MeanMetric(sync_on_compute=False),
                 "State/prior_entropy": MeanMetric(sync_on_compute=False),
