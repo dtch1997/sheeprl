@@ -156,7 +156,11 @@ def make_dict_env(
         else:
             env_spec = gym.spec(env_id).entry_point
             env = gym.make(env_id, render_mode="rgb_array")
-            if "mujoco" in env_spec:
+            if not isinstance(env_spec, str):
+                # Assume MuJoCo
+                env.frame_skip = 0
+                env = ActionRepeat(env, args.action_repeat)
+            elif "mujoco" in env_spec:
                 env.frame_skip = 0
             elif "atari" in env_spec:
                 if args.atari_noop_max < 0:
@@ -178,7 +182,7 @@ def make_dict_env(
             env = MaskVelocityWrapper(env)
 
         # action repeat
-        if "atari" not in env_spec and "dmc" not in _env_id and "diambra" not in _env_id:
+        if isinstance(env_spec, str) and "atari" not in env_spec and "dmc" not in _env_id and "diambra" not in _env_id:
             env = ActionRepeat(env, args.action_repeat)
 
         # Create observation dict
