@@ -229,6 +229,8 @@ def main():
                 "Metrics/CumulativeSafetyViolations": MeanMetric(sync_on_compute=False),
                 "Metrics/EpRet": MeanMetric(sync_on_compute=False),
                 "Metrics/EpLen": MeanMetric(sync_on_compute=False),
+                "Metrics/EpCost": MeanMetric(sync_on_compute=False),
+                "Metrics/ModifiedEpRet": MeanMetric(sync_on_compute=False),
             }
         )
 
@@ -328,8 +330,10 @@ def main():
                         )
                         aggregator.update("Rewards/rew_avg", agent_final_info["episode"]["r"][0])
                         aggregator.update("Game/ep_len_avg", agent_final_info["episode"]["l"][0])
-                        aggregator.update("Metrics/EpRet", agent_final_info["episode"]["r"][0])
+                        aggregator.update("Metrics/ModifiedEpRet", agent_final_info["episode"]["r"][0])
                         aggregator.update("Metrics/EpLen", agent_final_info["episode"]["l"][0])
+                        aggregator.update("Metrics/EpRet", agent_final_info["episode"]["orig_r"][0])
+                        aggregator.update("Metrics/EpCost", agent_final_info["episode"]["orig_c"][0])
 
         # Estimate returns with GAE (https://arxiv.org/abs/1506.02438)
         with torch.no_grad():
